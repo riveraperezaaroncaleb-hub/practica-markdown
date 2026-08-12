@@ -131,4 +131,3 @@ const SHA256 = (function () {
 function hashPassword(salt, password) {
   return SHA256(salt + '::' + password);
 }
-hosad

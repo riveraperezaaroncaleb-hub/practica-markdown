@@ -51,7 +51,7 @@
       '</form>' +
       '<p id="login-help" class="muted">Cuentas de demostración (solo datos ficticios):</p>' +
       '<ul class="demo-accounts">' +
-      '<li>admin / admin123 — Administración</li>' +
+      '<li>admin / 12345 — Administración</li>' +
       '<li>docente / docente123 — Docentes</li>' +
       '<li>estudiante / estudiante123 — Estudiantes / Familias</li>' +
       '</ul>' +
@@ -66,7 +66,7 @@
         DB.resetDemo();
         document.getElementById('login-user').value = '';
         document.getElementById('login-pass').value = '';
-        document.getElementById('login-msg').textContent = 'Datos restablecidos. Probá con admin / admin123.';
+        document.getElementById('login-msg').textContent = 'Datos restablecidos. Probá con admin / 12345.';
       }
     });
 

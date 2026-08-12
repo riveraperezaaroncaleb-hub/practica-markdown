@@ -172,11 +172,15 @@ const Views = (function () {
     }
 
     const recent = noticesFor(db, user).slice(0, 3);
+    const quickActions = user.role === 'student'
+      ? '<a class="btn btn-primary" href="#/profile">Editar mi perfil</a>'
+      : '<a class="btn btn-primary" href="#/notices">Agregar comunicado</a><a class="btn btn-outline" href="#/grades">Editar calificaciones</a><a class="btn btn-outline" href="#/attendance">Editar asistencia</a>' + (user.role === 'admin' ? '<a class="btn btn-outline" href="#/schedule">Agregar horario</a><a class="btn btn-outline" href="#/users">Agregar usuario</a><a class="btn btn-outline" href="#/profile">Editar mi perfil</a>' : '<a class="btn btn-outline" href="#/profile">Editar mi perfil</a>');
 
     container.innerHTML =
       '<section class="card">' +
       '<h2>Bienvenido, ' + esc(user.fullName) + '</h2>' +
       '<p class="muted">Rol: <strong>' + esc(DB.ROLES[user.role]) + '</strong></p>' +
+      '<div class="actions">' + quickActions + '</div>' +
       '<div class="stats-grid">' +
       stats.map(function (s) {
         return '<div class="stat-card"><span class="stat-value">' + esc(s.value) + '</span><span class="stat-label">' + esc(s.label) + '</span></div>';
@@ -205,8 +209,9 @@ const Views = (function () {
     container.innerHTML =
       (canWrite
         ? '<section class="card">' +
-          '<h2>Publicar comunicado</h2>' +
+          '<h2 id="notice-form-title">Publicar comunicado</h2>' +
           '<form id="notice-form">' +
+          '<input type="hidden" id="notice-id">' +
           '<div class="field">' +
           '<label for="notice-title">Título</label>' +
           '<input type="text" id="notice-title" required maxlength="120">' +
@@ -223,7 +228,8 @@ const Views = (function () {
           (user.role === 'admin' ? '<option value="teacher">Solo docentes</option>' : '') +
           '</select>' +
           '</div>' +
-          '<button type="submit" class="btn btn-primary">Publicar</button>' +
+          '<div class="actions"><button type="submit" class="btn btn-primary" id="notice-submit">Publicar</button>' +
+          '<button type="button" class="btn btn-outline hidden" id="notice-cancel">Cancelar</button></div>' +
           '</form>' +
           '</section>'
         : '') +
@@ -231,12 +237,12 @@ const Views = (function () {
       '<h2>Tablón de comunicados</h2>' +
       (list.length
         ? '<ul class="notice-list">' + list.map(function (n) {
-            const deletable = user.role === 'admin' || n.authorId === user.id;
+            const editable = user.role === 'admin' || n.authorId === user.id;
             return '<li class="notice-item">' +
               '<h3>' + esc(n.title) + '</h3>' +
               '<p class="muted">' + fmtDate(n.createdAt) + ' · Publicado por ' + esc(fullName(db, n.authorId)) + ' · Visible para ' + esc(n.audience === 'all' ? 'toda la comunidad' : DB.ROLES[n.audience]) + '</p>' +
               '<p>' + esc(n.body) + '</p>' +
-              (deletable ? '<button class="btn btn-danger btn-sm js-del-notice" data-id="' + esc(n.id) + '">Eliminar</button>' : '') +
+              (editable ? '<div class="actions"><button class="btn btn-outline btn-sm js-edit-notice" data-id="' + esc(n.id) + '">Editar</button><button class="btn btn-danger btn-sm js-del-notice" data-id="' + esc(n.id) + '">Eliminar</button></div>' : '') +
               '</li>';
           }).join('') + '</ul>'
         : '<p class="muted">No hay comunicados visibles.</p>') +
@@ -245,17 +251,37 @@ const Views = (function () {
     if (canWrite) {
       container.querySelector('#notice-form').addEventListener('submit', function (e) {
         e.preventDefault();
+        const id = document.getElementById('notice-id').value;
         DB.set(function (dbState) {
-          dbState.notices.push({
-            id: DB.uid('n'),
-            title: document.getElementById('notice-title').value.trim(),
-            body: document.getElementById('notice-body').value.trim(),
-            audience: document.getElementById('notice-audience').value,
-            authorId: user.id,
-            createdAt: new Date().toISOString()
-          });
+          const target = dbState.notices.find(function (notice) { return notice.id === id; });
+          if (target) {
+            if (user.role !== 'admin' && target.authorId !== user.id) {
+              return;
+            }
+            target.title = document.getElementById('notice-title').value.trim();
+            target.body = document.getElementById('notice-body').value.trim();
+            target.audience = document.getElementById('notice-audience').value;
+            return;
+          }
+          dbState.notices.push({ id: DB.uid('n'), title: document.getElementById('notice-title').value.trim(), body: document.getElementById('notice-body').value.trim(), audience: document.getElementById('notice-audience').value, authorId: user.id, createdAt: new Date().toISOString() });
         });
         render('notices', container, user);
+      });
+
+      container.querySelector('#notice-cancel').addEventListener('click', function () { render('notices', container, user); });
+      container.querySelectorAll('.js-edit-notice').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const target = db.notices.find(function (notice) { return notice.id === btn.getAttribute('data-id'); });
+          if (!target) { return; }
+          document.getElementById('notice-id').value = target.id;
+          document.getElementById('notice-title').value = target.title;
+          document.getElementById('notice-body').value = target.body;
+          document.getElementById('notice-audience').value = target.audience;
+          document.getElementById('notice-form-title').textContent = 'Editar comunicado';
+          document.getElementById('notice-submit').textContent = 'Guardar cambios';
+          document.getElementById('notice-cancel').classList.remove('hidden');
+          document.getElementById('notice-title').focus();
+        });
       });
     }
 
@@ -318,7 +344,6 @@ const Views = (function () {
           return '<th>' + esc(st.fullName) + '</th>';
         }).join('') + '</tr></thead><tbody>' + body + '</tbody></table>' +
         '</section>';
-      return;
     }
 
     const teacherSubject = db.subjects.find(function (s) {
@@ -507,25 +532,38 @@ const Views = (function () {
 
   function viewSchedule(container, user) {
     const db = DB.get();
-    const course = user.course;
+    const course = user.role === 'admin' ? '' : user.course;
     const entries = db.schedule.filter(function (s) {
-      return s.course === course;
+      return !course || s.course === course;
     });
     const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
 
     const rows = entries.sort(function (a, b) {
       return (a.time < b.time ? -1 : 1) || (a.day < b.day ? -1 : 1);
     }).map(function (s) {
-      return '<tr><td>' + esc(s.day) + '</td><td>' + esc(s.time) + '</td><td>' + esc(subjectName(db, s.subjectId)) + '</td></tr>';
+      return '<tr><td>' + esc(s.course) + '</td><td>' + esc(s.day) + '</td><td>' + esc(s.time) + '</td><td>' + esc(subjectName(db, s.subjectId)) + '</td>' +
+        (user.role === 'admin' ? '<td class="actions"><button class="btn btn-outline btn-sm js-edit-schedule" data-id="' + esc(s.id) + '">Editar</button><button class="btn btn-danger btn-sm js-del-schedule" data-id="' + esc(s.id) + '">Eliminar</button></td>' : '') + '</tr>';
     }).join('');
 
     container.innerHTML =
       '<section class="card">' +
       '<h2>Horario — Curso ' + esc(course) + '</h2>' +
       '<p class="muted">Días: ' + esc(days.join(', ')) + '</p>' +
-      (rows ? '<table class="table"><thead><tr><th>Día</th><th>Hora</th><th>Materia</th></tr></thead><tbody>' + rows + '</tbody></table>'
+      (rows ? '<table class="table"><thead><tr>' + (user.role === 'admin' ? '<th>Curso</th>' : '') + '<th>Día</th><th>Hora</th><th>Materia</th>' + (user.role === 'admin' ? '<th>Acciones</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>'
             : '<p class="muted">Sin horario cargado.</p>') +
       '</section>';
+
+    if (user.role !== 'admin') { return; }
+    const tools = document.createElement('section');
+    tools.className = 'card';
+    tools.innerHTML = '<h2>Administrar horarios</h2><button type="button" class="btn btn-primary" id="btn-new-schedule">Agregar horario</button><form id="schedule-form" class="hidden"><input type="hidden" id="schedule-id"><div class="form-grid"><div class="field"><label for="schedule-course">Curso</label><input id="schedule-course" required maxlength="40"></div><div class="field"><label for="schedule-day">Día</label><select id="schedule-day">' + days.map(function (day) { return '<option value="' + esc(day) + '">' + esc(day) + '</option>'; }).join('') + '</select></div><div class="field"><label for="schedule-time">Hora</label><input type="time" id="schedule-time" required></div><div class="field"><label for="schedule-subject">Materia</label><select id="schedule-subject">' + db.subjects.map(function (subject) { return '<option value="' + esc(subject.id) + '">' + esc(subject.name) + '</option>'; }).join('') + '</select></div></div><div class="actions"><button type="submit" class="btn btn-primary">Guardar</button><button type="button" class="btn btn-outline" id="schedule-cancel">Cancelar</button></div></form><table class="table"><thead><tr><th>Curso</th><th>Día</th><th>Hora</th><th>Materia</th><th>Acciones</th></tr></thead><tbody>' + entries.map(function (entry) { return '<tr><td>' + esc(entry.course) + '</td><td>' + esc(entry.day) + '</td><td>' + esc(entry.time) + '</td><td>' + esc(subjectName(db, entry.subjectId)) + '</td><td class="actions"><button class="btn btn-outline btn-sm js-edit-schedule" data-id="' + esc(entry.id) + '">Editar</button><button class="btn btn-danger btn-sm js-del-schedule" data-id="' + esc(entry.id) + '">Eliminar</button></td></tr>'; }).join('') + '</tbody></table>';
+    container.appendChild(tools);
+    const form = container.querySelector('#schedule-form');
+    container.querySelector('#btn-new-schedule').addEventListener('click', function () { form.reset(); document.getElementById('schedule-id').value = ''; form.classList.remove('hidden'); document.getElementById('schedule-course').focus(); });
+    container.querySelector('#schedule-cancel').addEventListener('click', function () { form.classList.add('hidden'); });
+    form.addEventListener('submit', function (e) { e.preventDefault(); const id = document.getElementById('schedule-id').value; const values = { course: document.getElementById('schedule-course').value.trim(), day: document.getElementById('schedule-day').value, time: document.getElementById('schedule-time').value, subjectId: document.getElementById('schedule-subject').value }; DB.set(function (state) { const target = state.schedule.find(function (entry) { return entry.id === id; }); if (target) { Object.assign(target, values); } else { values.id = DB.uid('sch'); state.schedule.push(values); } }); render('schedule', container, user); });
+    container.querySelectorAll('.js-edit-schedule').forEach(function (btn) { btn.addEventListener('click', function () { const entry = db.schedule.find(function (item) { return item.id === btn.getAttribute('data-id'); }); if (!entry) { return; } document.getElementById('schedule-id').value = entry.id; document.getElementById('schedule-course').value = entry.course; document.getElementById('schedule-day').value = entry.day; document.getElementById('schedule-time').value = entry.time; document.getElementById('schedule-subject').value = entry.subjectId; form.classList.remove('hidden'); }); });
+    container.querySelectorAll('.js-del-schedule').forEach(function (btn) { btn.addEventListener('click', function () { if (!window.confirm('Eliminar este horario?')) { return; } const id = btn.getAttribute('data-id'); DB.set(function (state) { state.schedule = state.schedule.filter(function (entry) { return entry.id !== id; }); }); render('schedule', container, user); }); });
   }
 
   function viewUsers(container, user) {
@@ -609,6 +647,10 @@ const Views = (function () {
         window.alert('Ese nombre de usuario ya existe.');
         return;
       }
+      if (id && password && password.length < 6) {
+        window.alert('La nueva contraseña debe tener al menos 6 caracteres.');
+        return;
+      }
 
       if (id) {
         DB.set(function (dbState) {
@@ -621,6 +663,13 @@ const Views = (function () {
             target.email = email;
             target.role = role;
             target.course = course;
+            if (password) {
+              if (password.length < 6) {
+                return;
+              }
+              target.salt = DB.randomSalt();
+              target.passwordHash = hashPassword(target.salt, password);
+            }
           }
         });
       } else {

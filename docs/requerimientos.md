@@ -110,7 +110,7 @@ Tareas técnicas:
 Pasos para comprobar el prototipo de forma manual:
 
 1. Abrir `index.html` en el navegador.
-2. Iniciar sesión como `admin` / `admin123` y revisar el módulo de usuarios.
+2. Iniciar sesión como `admin` / `12345` y revisar el módulo de usuarios.
 3. Iniciar sesión como `docente` / `docente123` y cargar una calificación y una asistencia.
 4. Iniciar sesión como `estudiante` / `estudiante123` y verificar que se ven las calificaciones cargadas.
 5. Publicar un comunicado como docente y verificarlo con la cuenta de estudiante.

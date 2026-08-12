@@ -30,6 +30,7 @@ const DB = (function () {
     const now = new Date().toISOString();
 
     return {
+      adminCredentialVersion: 2,
       users: [
         {
           id: 'u-admin',
@@ -40,7 +41,7 @@ const DB = (function () {
           course: '',
           active: true,
           salt: salt,
-          passwordHash: hashPassword(salt, 'admin123')
+          passwordHash: hashPassword(salt, '12345')
         },
         {
           id: 'u-doc1',
@@ -148,7 +149,9 @@ const DB = (function () {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
       try {
-        return JSON.parse(raw);
+        const db = JSON.parse(raw);
+        migrateAdminCredentials(db);
+        return db;
       } catch (e) {
         localStorage.removeItem(DB_KEY);
       }
@@ -160,6 +163,21 @@ const DB = (function () {
 
   function save(db) {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
+  }
+
+  function migrateAdminCredentials(db) {
+    if (db.adminCredentialVersion === 2) {
+      return;
+    }
+    const admin = db.users.find(function (user) {
+      return user.id === 'u-admin' && user.username === 'admin' && user.role === 'admin';
+    });
+    if (admin) {
+      admin.salt = randomSalt();
+      admin.passwordHash = hashPassword(admin.salt, '12345');
+    }
+    db.adminCredentialVersion = 2;
+    save(db);
   }
 
   function get() {
