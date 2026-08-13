@@ -42,7 +42,9 @@ Intranet escolar para un colegio público. Permite la comunicación y consulta a
 - 2026-08: Construcción del prototipo v0.1.0 en HTML, CSS y JavaScript puro con persistencia en `localStorage`.
 - 2026-08: Implementación de hash SHA-256 con sal para contraseñas y corrección del padding de 64 bits.
 - 2026-08: Adición del perfil de usuario funcional y del menú hamburguesa accesible.
-- 2026-08: Unificación de absolutamente todas las alertas, notificaciones y mensajes del sistema mediante Toastify (`toastify.js`).
+- 2026-08: Unificación de absolutamente todas las alertas, notificaciones y mensajes del sistema mediante Toastify (`toastify.js`), eliminando todas las ventanas nativas (`alert`, `confirm`, `prompt`).
+- 2026-08: Transformación del módulo de horarios a grilla semanal matricial donde la administración organiza únicamente materias existentes por día y turno horario.
+- 2026-08: Integración del módulo de Asistente IA de aclaración de dudas para responder consultas escolares y responder estrictamente que no está calificada ante preguntas fuera de alcance.
 
 ## 7. Buenas Prácticas
 

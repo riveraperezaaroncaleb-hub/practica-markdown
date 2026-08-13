@@ -16,6 +16,7 @@
     { id: 'attendance', label: 'Asistencia', icon: '☑' },
     { id: 'schedule', label: 'Horario', icon: '◷' },
     { id: 'users', label: 'Usuarios', icon: '⚙' },
+    { id: 'assistant', label: 'Asistente IA', icon: '🤖' },
     { id: 'profile', label: 'Mi perfil', icon: '◉' }
   ];
 

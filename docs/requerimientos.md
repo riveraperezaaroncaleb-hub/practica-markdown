@@ -82,6 +82,20 @@ Tareas técnicas:
 - [x] Menú lateral construido según las vistas permitidas.
 - [x] Redirección automática en el ruteo ante una vista no permitida.
 
+### RF-06 — Asistente IA de aclaración de dudas
+
+Historias de usuario:
+
+- [x] Como usuario, quiero realizar preguntas sobre el sistema y recibir aclaraciones automáticas estilo IA.
+- [x] Como usuario, quiero seleccionar preguntas sugeridas para probar rápidamente las consultas comunes.
+- [x] Como sistema, quiero responder la información relevante para temas escolares y responder estrictamente "No estoy calificada para responder dicha pregunta." ante cualquier consulta ajena.
+
+Tareas técnicas:
+
+- [x] Módulo `Assistant` (`js/assistant.js`) con base de conocimiento y normalización de texto.
+- [x] Vista interactiva `viewAssistant` en `js/views.js` con chat en vivo e indicador de escritura.
+- [x] Habilitación en menú lateral (`NAV`) y permisos (`PERMISSIONS`) para todos los roles.
+
 ## Cobertura no funcional
 
 ### RNF-01 — Accesibilidad

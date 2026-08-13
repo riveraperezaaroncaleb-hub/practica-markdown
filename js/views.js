@@ -142,6 +142,9 @@ const Views = (function () {
       case 'profile':
         viewProfile(container, user);
         break;
+      case 'assistant':
+        viewAssistant(container, user);
+        break;
       default:
         container.innerHTML = '<p>Vista no encontrada.</p>';
     }
@@ -546,38 +549,107 @@ const Views = (function () {
 
   function viewSchedule(container, user) {
     const db = DB.get();
-    const course = user.role === 'admin' ? '' : user.course;
-    const entries = db.schedule.filter(function (s) {
-      return !course || s.course === course;
-    });
-    const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    const availableCourses = Array.from(new Set(
+      db.subjects.map(function (s) { return s.course; })
+        .concat(db.users.map(function (u) { return u.course; }))
+        .filter(Boolean)
+    ));
+    if (!availableCourses.length) {
+      availableCourses.push('5° A');
+    }
+    const currentCourse = user.role === 'admin'
+      ? (container._selectedCourse || availableCourses[0])
+      : (user.course || '5° A');
 
-    const rows = entries.sort(function (a, b) {
-      return (a.time < b.time ? -1 : 1) || (a.day < b.day ? -1 : 1);
-    }).map(function (s) {
-      return '<tr><td>' + esc(s.course) + '</td><td>' + esc(s.day) + '</td><td>' + esc(s.time) + '</td><td>' + esc(subjectName(db, s.subjectId)) + '</td>' +
-        (user.role === 'admin' ? '<td class="actions"><button class="btn btn-outline btn-sm js-edit-schedule" data-id="' + esc(s.id) + '">Editar</button><button class="btn btn-danger btn-sm js-del-schedule" data-id="' + esc(s.id) + '">Eliminar</button></td>' : '') + '</tr>';
+    const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    const defaultSlots = ['08:00', '10:00', '12:00', '14:00'];
+    const extraSlots = db.schedule
+      .filter(function (s) { return s.course === currentCourse; })
+      .map(function (s) { return s.time; })
+      .filter(function (t) { return defaultSlots.indexOf(t) === -1; });
+    const timeSlots = defaultSlots.concat(extraSlots).sort();
+
+    var courseSubjects = db.subjects.filter(function (s) {
+      return !s.course || s.course === currentCourse;
+    });
+    if (!courseSubjects.length) {
+      courseSubjects = db.subjects;
+    }
+
+    const courseSelectHtml = user.role === 'admin'
+      ? '<div class="field"><label for="schedule-course-select">Curso</label><select id="schedule-course-select">' +
+        availableCourses.map(function (c) {
+          return '<option value="' + esc(c) + '"' + (c === currentCourse ? ' selected' : '') + '>' + esc(c) + '</option>';
+        }).join('') + '</select></div>'
+      : '';
+
+    const ths = days.map(function (d) { return '<th>' + esc(d) + '</th>'; }).join('');
+
+    const trs = timeSlots.map(function (slot) {
+      const tds = days.map(function (day) {
+        const match = db.schedule.find(function (s) {
+          return s.course === currentCourse && s.day === day && s.time === slot;
+        });
+        const currentSubId = match ? match.subjectId : '';
+
+        if (user.role === 'admin') {
+          const options = '<option value="">-- Libre --</option>' +
+            courseSubjects.map(function (s) {
+              return '<option value="' + esc(s.id) + '"' + (s.id === currentSubId ? ' selected' : '') + '>' + esc(s.name) + '</option>';
+            }).join('');
+          return '<td><select class="schedule-cell-select" data-day="' + esc(day) + '" data-time="' + esc(slot) + '">' + options + '</select></td>';
+        } else {
+          const subName = currentSubId ? subjectName(db, currentSubId) : '';
+          return '<td>' + (subName ? '<span class="badge badge-ok">' + esc(subName) + '</span>' : '<span class="muted">—</span>') + '</td>';
+        }
+      }).join('');
+
+      return '<tr><td><strong>' + esc(slot) + ' hs</strong></td>' + tds + '</tr>';
     }).join('');
 
     container.innerHTML =
       '<section class="card">' +
-      '<h2>Horario — Curso ' + esc(course) + '</h2>' +
-      '<p class="muted">Días: ' + esc(days.join(', ')) + '</p>' +
-      (rows ? '<table class="table"><thead><tr>' + (user.role === 'admin' ? '<th>Curso</th>' : '') + '<th>Día</th><th>Hora</th><th>Materia</th>' + (user.role === 'admin' ? '<th>Acciones</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>'
-            : '<p class="muted">Sin horario cargado.</p>') +
+      '<h2>Horario Semanal — Curso ' + esc(currentCourse) + '</h2>' +
+      '<p class="muted">' + (user.role === 'admin' ? 'Organizá y asigná las materias existentes en el horario semanal.' : 'Consulta del horario semanal de materias.') + '</p>' +
+      courseSelectHtml +
+      '<table class="table"><thead><tr><th>Hora</th>' + ths + '</tr></thead><tbody>' + trs + '</tbody></table>' +
+      (user.role === 'admin' ? '<button type="button" class="btn btn-primary" id="schedule-save-all">Guardar horario semanal</button>' : '') +
       '</section>';
 
-    if (user.role !== 'admin') { return; }
-    const tools = document.createElement('section');
-    tools.className = 'card';
-    tools.innerHTML = '<h2>Administrar horarios</h2><button type="button" class="btn btn-primary" id="btn-new-schedule">Agregar horario</button><form id="schedule-form" class="hidden"><input type="hidden" id="schedule-id"><div class="form-grid"><div class="field"><label for="schedule-course">Curso</label><input id="schedule-course" required maxlength="40"></div><div class="field"><label for="schedule-day">Día</label><select id="schedule-day">' + days.map(function (day) { return '<option value="' + esc(day) + '">' + esc(day) + '</option>'; }).join('') + '</select></div><div class="field"><label for="schedule-time">Hora</label><input type="time" id="schedule-time" required></div><div class="field"><label for="schedule-subject">Materia</label><select id="schedule-subject">' + db.subjects.map(function (subject) { return '<option value="' + esc(subject.id) + '">' + esc(subject.name) + '</option>'; }).join('') + '</select></div></div><div class="actions"><button type="submit" class="btn btn-primary">Guardar</button><button type="button" class="btn btn-outline" id="schedule-cancel">Cancelar</button></div></form><table class="table"><thead><tr><th>Curso</th><th>Día</th><th>Hora</th><th>Materia</th><th>Acciones</th></tr></thead><tbody>' + entries.map(function (entry) { return '<tr><td>' + esc(entry.course) + '</td><td>' + esc(entry.day) + '</td><td>' + esc(entry.time) + '</td><td>' + esc(subjectName(db, entry.subjectId)) + '</td><td class="actions"><button class="btn btn-outline btn-sm js-edit-schedule" data-id="' + esc(entry.id) + '">Editar</button><button class="btn btn-danger btn-sm js-del-schedule" data-id="' + esc(entry.id) + '">Eliminar</button></td></tr>'; }).join('') + '</tbody></table>';
-    container.appendChild(tools);
-    const form = container.querySelector('#schedule-form');
-    container.querySelector('#btn-new-schedule').addEventListener('click', function () { form.reset(); document.getElementById('schedule-id').value = ''; form.classList.remove('hidden'); document.getElementById('schedule-course').focus(); });
-    container.querySelector('#schedule-cancel').addEventListener('click', function () { form.classList.add('hidden'); });
-    form.addEventListener('submit', function (e) { e.preventDefault(); const id = document.getElementById('schedule-id').value; const values = { course: document.getElementById('schedule-course').value.trim(), day: document.getElementById('schedule-day').value, time: document.getElementById('schedule-time').value, subjectId: document.getElementById('schedule-subject').value }; DB.set(function (state) { const target = state.schedule.find(function (entry) { return entry.id === id; }); if (target) { Object.assign(target, values); } else { values.id = DB.uid('sch'); state.schedule.push(values); } }); render('schedule', container, user); Toastify({ text: id ? 'Horario actualizado correctamente.' : 'Horario guardado correctamente.', className: 'toast-success' }).showToast(); });
-    container.querySelectorAll('.js-edit-schedule').forEach(function (btn) { btn.addEventListener('click', function () { const entry = db.schedule.find(function (item) { return item.id === btn.getAttribute('data-id'); }); if (!entry) { return; } document.getElementById('schedule-id').value = entry.id; document.getElementById('schedule-course').value = entry.course; document.getElementById('schedule-day').value = entry.day; document.getElementById('schedule-time').value = entry.time; document.getElementById('schedule-subject').value = entry.subjectId; form.classList.remove('hidden'); }); });
-    container.querySelectorAll('.js-del-schedule').forEach(function (btn) { btn.addEventListener('click', function () { const id = btn.getAttribute('data-id'); DB.set(function (state) { state.schedule = state.schedule.filter(function (entry) { return entry.id !== id; }); }); render('schedule', container, user); Toastify({ text: 'Horario eliminado correctamente.', className: 'toast-success' }).showToast(); }); });
+    if (user.role === 'admin') {
+      const courseSelect = container.querySelector('#schedule-course-select');
+      if (courseSelect) {
+        courseSelect.addEventListener('change', function (e) {
+          container._selectedCourse = e.target.value;
+          render('schedule', container, user);
+        });
+      }
+
+      const saveBtn = container.querySelector('#schedule-save-all');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+          DB.set(function (dbState) {
+            dbState.schedule = dbState.schedule.filter(function (s) {
+              return s.course !== currentCourse;
+            });
+            container.querySelectorAll('.schedule-cell-select').forEach(function (sel) {
+              const subId = sel.value;
+              if (subId) {
+                dbState.schedule.push({
+                  id: DB.uid('sch'),
+                  course: currentCourse,
+                  day: sel.getAttribute('data-day'),
+                  time: sel.getAttribute('data-time'),
+                  subjectId: subId
+                });
+              }
+            });
+          });
+          render('schedule', container, user);
+          Toastify({ text: 'Horario semanal actualizado correctamente.', className: 'toast-success' }).showToast();
+        });
+      }
+    }
   }
 
   function viewUsers(container, user) {
@@ -885,6 +957,131 @@ const Views = (function () {
       document.getElementById('pass-new').value = '';
       document.getElementById('pass-confirm').value = '';
     });
+  }
+
+  function formatChatMessage(text) {
+    if (!text) return '';
+    return esc(text)
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>');
+  }
+
+  function viewAssistant(container, user) {
+    var history = [
+      {
+        sender: 'ai',
+        text: '¡Hola, ' + user.fullName + '! Soy el Asistente IA de la Intranet Escolar. Estoy capacitado para responder tus preguntas sobre calificaciones, horarios, comunicados, asistencia y funciones del sistema.\n\n¿En qué te puedo ayudar hoy?'
+      }
+    ];
+
+    container.innerHTML =
+      '<header class="card assistant-header">' +
+      '<h2>🤖 Asistente IA de Aclaración de Dudas</h2>' +
+      '<p class="muted">Realizá tus preguntas sobre calificaciones, horarios, comunicados, asistencia, perfiles o normativa del colegio.</p>' +
+      '<div class="assistant-notice" role="status"><span class="badge badge-ok">IA Operativa</span> <span>Para preguntas ajenas al ámbito escolar o el sistema, el asistente responderá estrictamente: <em>"No estoy calificada para responder dicha pregunta."</em></span></div>' +
+      '</header>' +
+      '<section class="card assistant-chat-card">' +
+      '<div class="chat-header-actions">' +
+      '<h3>Conversación en vivo</h3>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-reset-chat">Reiniciar chat</button>' +
+      '</div>' +
+      '<div class="chat-box" id="chat-box" tabindex="0" aria-label="Historial de conversación" aria-live="polite"></div>' +
+      '<div class="chat-chips-area">' +
+      '<p class="hint muted">Preguntas sugeridas (hacé clic para probar):</p>' +
+      '<div class="chip-list" id="chip-list"></div>' +
+      '</div>' +
+      '<form id="chat-form" class="chat-form">' +
+      '<div class="chat-input-wrap">' +
+      '<input type="text" id="chat-input" placeholder="Escribí tu pregunta sobre la intranet o colegio..." autocomplete="off" required aria-label="Pregunta para el Asistente IA">' +
+      '<button type="submit" class="btn btn-primary" id="btn-chat-submit">Enviar</button>' +
+      '</div>' +
+      '</form>' +
+      '</section>';
+
+    var chatBox = container.querySelector('#chat-box');
+    var chipList = container.querySelector('#chip-list');
+    var chatForm = container.querySelector('#chat-form');
+    var chatInput = container.querySelector('#chat-input');
+    var btnReset = container.querySelector('#btn-reset-chat');
+
+    function renderMessages() {
+      chatBox.innerHTML = history.map(function (msg) {
+        var isUser = msg.sender === 'user';
+        var bubbleClass = isUser ? 'chat-bubble chat-bubble-user' : 'chat-bubble chat-bubble-ai';
+        var senderName = isUser ? esc(user.fullName) : 'Asistente IA Escolar';
+        var avatarIcon = isUser ? '👤' : '🤖';
+
+        return '<div class="' + bubbleClass + '">' +
+          '<div class="chat-bubble-header">' +
+          '<span class="chat-bubble-icon" aria-hidden="true">' + avatarIcon + '</span>' +
+          '<strong class="chat-bubble-author">' + senderName + '</strong>' +
+          '</div>' +
+          '<div class="chat-bubble-content">' + formatChatMessage(msg.text) + '</div>' +
+          '</div>';
+      }).join('');
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function renderChips() {
+      var suggested = Assistant.getSuggestedQuestions();
+      chipList.innerHTML = suggested.map(function (q) {
+        return '<button type="button" class="chip-btn" data-question="' + esc(q) + '">' + esc(q) + '</button>';
+      }).join('');
+    }
+
+    function handleSend(questionText) {
+      if (!questionText.trim()) return;
+
+      history.push({ sender: 'user', text: questionText });
+      renderMessages();
+
+      var typingEl = document.createElement('div');
+      typingEl.className = 'chat-bubble chat-bubble-ai chat-typing';
+      typingEl.innerHTML = '<div class="chat-bubble-header"><span class="chat-bubble-icon">🤖</span><strong>Asistente IA Escolar</strong></div><div class="typing-dots"><span>.</span><span>.</span><span>.</span></div>';
+      chatBox.appendChild(typingEl);
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      setTimeout(function () {
+        if (typingEl.parentNode) {
+          typingEl.parentNode.removeChild(typingEl);
+        }
+        var response = Assistant.ask(questionText);
+        history.push({ sender: 'ai', text: response });
+        renderMessages();
+      }, 300);
+    }
+
+    chatForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var q = chatInput.value.trim();
+      chatInput.value = '';
+      handleSend(q);
+    });
+
+    chipList.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('.chip-btn') : null;
+      if (btn) {
+        var q = btn.getAttribute('data-question');
+        if (q) {
+          handleSend(q);
+        }
+      }
+    });
+
+    btnReset.addEventListener('click', function () {
+      history = [
+        {
+          sender: 'ai',
+          text: '¡Hola, ' + user.fullName + '! Soy el Asistente IA de la Intranet Escolar. Estoy capacitado para responder tus preguntas sobre calificaciones, horarios, comunicados, asistencia y funciones del sistema.\n\n¿En qué te puedo ayudar hoy?'
+        }
+      ];
+      renderMessages();
+      Toastify({ text: 'Conversación reiniciada.', className: 'toast-info' }).showToast();
+    });
+
+    renderChips();
+    renderMessages();
   }
 
   return {
