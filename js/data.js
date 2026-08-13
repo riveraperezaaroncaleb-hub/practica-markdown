@@ -84,14 +84,14 @@ const DB = (function () {
         { id: 's-his', name: 'Historia', course: '5° A' }
       ],
       grades: [
-        { id: uid('g'), studentId: 'u-est1', subjectId: 's-mat', period: 1, value: 8 },
-        { id: uid('g'), studentId: 'u-est1', subjectId: 's-mat', period: 2, value: 9 },
-        { id: uid('g'), studentId: 'u-est1', subjectId: 's-len', period: 1, value: 7 },
-        { id: uid('g'), studentId: 'u-est1', subjectId: 's-len', period: 2, value: 8 },
-        { id: uid('g'), studentId: 'u-est1', subjectId: 's-cn', period: 1, value: 9 },
-        { id: uid('g'), studentId: 'u-est1', subjectId: 's-cn', period: 2, value: 10 },
-        { id: uid('g'), studentId: 'u-est1', subjectId: 's-his', period: 1, value: 6 },
-        { id: uid('g'), studentId: 'u-est1', subjectId: 's-his', period: 2, value: 7 }
+        { id: uid('g'), studentId: 'u-est1', subjectId: 's-mat', period: 1, value: 80 },
+        { id: uid('g'), studentId: 'u-est1', subjectId: 's-mat', period: 2, value: 90 },
+        { id: uid('g'), studentId: 'u-est1', subjectId: 's-len', period: 1, value: 70 },
+        { id: uid('g'), studentId: 'u-est1', subjectId: 's-len', period: 2, value: 80 },
+        { id: uid('g'), studentId: 'u-est1', subjectId: 's-cn', period: 1, value: 90 },
+        { id: uid('g'), studentId: 'u-est1', subjectId: 's-cn', period: 2, value: 100 },
+        { id: uid('g'), studentId: 'u-est1', subjectId: 's-his', period: 1, value: 60 },
+        { id: uid('g'), studentId: 'u-est1', subjectId: 's-his', period: 2, value: 70 }
       ],
       attendance: [
         { id: uid('a'), studentId: 'u-est1', subjectId: 's-mat', date: '2026-08-03', present: true },

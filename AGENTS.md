@@ -42,6 +42,7 @@ Intranet escolar para un colegio público. Permite la comunicación y consulta a
 - 2026-08: Construcción del prototipo v0.1.0 en HTML, CSS y JavaScript puro con persistencia en `localStorage`.
 - 2026-08: Implementación de hash SHA-256 con sal para contraseñas y corrección del padding de 64 bits.
 - 2026-08: Adición del perfil de usuario funcional y del menú hamburguesa accesible.
+- 2026-08: Unificación de absolutamente todas las alertas, notificaciones y mensajes del sistema mediante Toastify (`toastify.js`).
 
 ## 7. Buenas Prácticas
 
@@ -49,4 +50,3 @@ Intranet escolar para un colegio público. Permite la comunicación y consulta a
 - Mantener mensajes de commit bajo la convención Conventional Commits.
 - Verificar la sintaxis de cada archivo JavaScript antes de confirmar cambios (`node --check`).
 - Priorizar la accesibilidad (contraste, etiquetas y navegación por teclado) en cada vista nueva.
-hola

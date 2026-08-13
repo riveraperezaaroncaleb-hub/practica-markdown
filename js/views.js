@@ -32,10 +32,10 @@ const Views = (function () {
   }
 
   function gradeClass(value) {
-    if (value >= 7) {
+    if (value >= 70) {
       return 'grade-good';
     }
-    if (value >= 4) {
+    if (value >= 40) {
       return 'grade-mid';
     }
     return 'grade-bad';
@@ -69,6 +69,9 @@ const Views = (function () {
   }
 
   function setGrade(db, studentId, subjectId, period, value) {
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      return false;
+    }
     const existing = db.grades.find(function (x) {
       return x.studentId === studentId && x.subjectId === subjectId && x.period === period;
     });
@@ -77,6 +80,7 @@ const Views = (function () {
     } else {
       db.grades.push({ id: DB.uid('g'), studentId: studentId, subjectId: subjectId, period: period, value: value });
     }
+    return true;
   }
 
   function averageOf(db, studentId) {
@@ -266,6 +270,7 @@ const Views = (function () {
           dbState.notices.push({ id: DB.uid('n'), title: document.getElementById('notice-title').value.trim(), body: document.getElementById('notice-body').value.trim(), audience: document.getElementById('notice-audience').value, authorId: user.id, createdAt: new Date().toISOString() });
         });
         render('notices', container, user);
+        Toastify({ text: id ? 'Comunicado actualizado correctamente.' : 'Comunicado publicado correctamente.', className: 'toast-success' }).showToast();
       });
 
       container.querySelector('#notice-cancel').addEventListener('click', function () { render('notices', container, user); });
@@ -289,15 +294,13 @@ const Views = (function () {
     Array.prototype.forEach.call(delButtons, function (btn) {
       btn.addEventListener('click', function () {
         const id = btn.getAttribute('data-id');
-        if (!window.confirm('¿Eliminar este comunicado?')) {
-          return;
-        }
         DB.set(function (dbState) {
           dbState.notices = dbState.notices.filter(function (n) {
             return n.id !== id;
           });
         });
         render('notices', container, user);
+        Toastify({ text: 'Comunicado eliminado correctamente.', className: 'toast-success' }).showToast();
       });
     });
   }
@@ -365,7 +368,7 @@ const Views = (function () {
         const inputs = periods.map(function (p) {
           const v = getGrade(db, st.id, subjectId, p);
           return '<td><label class="sr-only" for="g-' + esc(st.id) + '-' + p + '">Nota período ' + p + ' de ' + esc(st.fullName) + '</label>' +
-            '<input type="number" id="g-' + esc(st.id) + '-' + p + '" class="grade-input" data-student="' + esc(st.id) + '" data-period="' + p + '" min="1" max="10" step="1" value="' + (v == null ? '' : v) + '"></td>';
+            '<input type="number" id="g-' + esc(st.id) + '-' + p + '" class="grade-input" data-student="' + esc(st.id) + '" data-period="' + p + '" min="0" max="100" step="1" value="' + (v == null ? '' : v) + '"></td>';
         }).join('');
         return '<tr><td>' + esc(st.fullName) + '</td>' + inputs + '</tr>';
       }).join('');
@@ -382,16 +385,27 @@ const Views = (function () {
 
     container.querySelector('#grade-save').addEventListener('click', function () {
       const subjectId = subjectIdOfCurrentSelection();
+      let invalidGrade = false;
+      container.querySelectorAll('.grade-input').forEach(function (input) {
+        const value = parseFloat(input.value);
+        if (input.value !== '' && (isNaN(value) || value < 0 || value > 100)) {
+          invalidGrade = true;
+        }
+      });
+      if (invalidGrade) {
+        Toastify({ text: 'Cada calificación debe estar entre 0 y 100.', className: 'toast-error' }).showToast();
+        return;
+      }
       DB.set(function (dbState) {
         container.querySelectorAll('.grade-input').forEach(function (input) {
           const value = parseFloat(input.value);
-          if (!isNaN(value) && value >= 1 && value <= 10) {
+          if (!isNaN(value)) {
             setGrade(dbState, input.getAttribute('data-student'), subjectId, parseInt(input.getAttribute('data-period'), 10), value);
           }
         });
       });
       render('grades', container, user);
-      window.alert('Calificaciones guardadas correctamente.');
+      Toastify({ text: 'Calificaciones guardadas correctamente.', className: 'toast-success' }).showToast();
     });
 
     container.querySelector('#grade-subject').addEventListener('change', function () {
@@ -487,7 +501,7 @@ const Views = (function () {
       const subjectId = currentSelection();
       const dateStr = container.querySelector('#att-date').value;
       if (!dateStr) {
-        window.alert('Seleccioná una fecha válida.');
+        Toastify({ text: 'Seleccioná una fecha válida.', className: 'toast-error' }).showToast();
         return;
       }
       DB.set(function (dbState) {
@@ -505,7 +519,7 @@ const Views = (function () {
         });
       });
       render('attendance', container, user);
-      window.alert('Asistencia guardada.');
+      Toastify({ text: 'Asistencia guardada.', className: 'toast-success' }).showToast();
     });
 
     container.querySelector('#att-subject').addEventListener('change', function () {
@@ -561,9 +575,9 @@ const Views = (function () {
     const form = container.querySelector('#schedule-form');
     container.querySelector('#btn-new-schedule').addEventListener('click', function () { form.reset(); document.getElementById('schedule-id').value = ''; form.classList.remove('hidden'); document.getElementById('schedule-course').focus(); });
     container.querySelector('#schedule-cancel').addEventListener('click', function () { form.classList.add('hidden'); });
-    form.addEventListener('submit', function (e) { e.preventDefault(); const id = document.getElementById('schedule-id').value; const values = { course: document.getElementById('schedule-course').value.trim(), day: document.getElementById('schedule-day').value, time: document.getElementById('schedule-time').value, subjectId: document.getElementById('schedule-subject').value }; DB.set(function (state) { const target = state.schedule.find(function (entry) { return entry.id === id; }); if (target) { Object.assign(target, values); } else { values.id = DB.uid('sch'); state.schedule.push(values); } }); render('schedule', container, user); });
+    form.addEventListener('submit', function (e) { e.preventDefault(); const id = document.getElementById('schedule-id').value; const values = { course: document.getElementById('schedule-course').value.trim(), day: document.getElementById('schedule-day').value, time: document.getElementById('schedule-time').value, subjectId: document.getElementById('schedule-subject').value }; DB.set(function (state) { const target = state.schedule.find(function (entry) { return entry.id === id; }); if (target) { Object.assign(target, values); } else { values.id = DB.uid('sch'); state.schedule.push(values); } }); render('schedule', container, user); Toastify({ text: id ? 'Horario actualizado correctamente.' : 'Horario guardado correctamente.', className: 'toast-success' }).showToast(); });
     container.querySelectorAll('.js-edit-schedule').forEach(function (btn) { btn.addEventListener('click', function () { const entry = db.schedule.find(function (item) { return item.id === btn.getAttribute('data-id'); }); if (!entry) { return; } document.getElementById('schedule-id').value = entry.id; document.getElementById('schedule-course').value = entry.course; document.getElementById('schedule-day').value = entry.day; document.getElementById('schedule-time').value = entry.time; document.getElementById('schedule-subject').value = entry.subjectId; form.classList.remove('hidden'); }); });
-    container.querySelectorAll('.js-del-schedule').forEach(function (btn) { btn.addEventListener('click', function () { if (!window.confirm('Eliminar este horario?')) { return; } const id = btn.getAttribute('data-id'); DB.set(function (state) { state.schedule = state.schedule.filter(function (entry) { return entry.id !== id; }); }); render('schedule', container, user); }); });
+    container.querySelectorAll('.js-del-schedule').forEach(function (btn) { btn.addEventListener('click', function () { const id = btn.getAttribute('data-id'); DB.set(function (state) { state.schedule = state.schedule.filter(function (entry) { return entry.id !== id; }); }); render('schedule', container, user); Toastify({ text: 'Horario eliminado correctamente.', className: 'toast-success' }).showToast(); }); });
   }
 
   function viewUsers(container, user) {
@@ -644,11 +658,11 @@ const Views = (function () {
         return u.username.toLowerCase() === username.toLowerCase() && u.id !== id;
       });
       if (usernameTaken) {
-        window.alert('Ese nombre de usuario ya existe.');
+        Toastify({ text: 'Ese nombre de usuario ya existe.', className: 'toast-error' }).showToast();
         return;
       }
       if (id && password && password.length < 6) {
-        window.alert('La nueva contraseña debe tener al menos 6 caracteres.');
+        Toastify({ text: 'La nueva contraseña debe tener al menos 6 caracteres.', className: 'toast-error' }).showToast();
         return;
       }
 
@@ -674,7 +688,7 @@ const Views = (function () {
         });
       } else {
         if (!password || password.length < 6) {
-          window.alert('La contraseña inicial debe tener al menos 6 caracteres.');
+          Toastify({ text: 'La contraseña inicial debe tener al menos 6 caracteres.', className: 'toast-error' }).showToast();
           return;
         }
         const salt = DB.randomSalt();
@@ -693,6 +707,7 @@ const Views = (function () {
         });
       }
       render('users', container, user);
+      Toastify({ text: id ? 'Usuario actualizado correctamente.' : 'Usuario creado correctamente.', className: 'toast-success' }).showToast();
     });
 
     const editButtons = container.querySelectorAll('.js-edit-user');
@@ -723,18 +738,21 @@ const Views = (function () {
       btn.addEventListener('click', function () {
         const id = btn.getAttribute('data-id');
         if (id === user.id) {
-          window.alert('No podés darte de baja a vos mismo.');
+          Toastify({ text: 'No podés darte de baja a vos mismo.', className: 'toast-error' }).showToast();
           return;
         }
+        let isNowActive = false;
         DB.set(function (dbState) {
           const target = dbState.users.find(function (u) {
             return u.id === id;
           });
           if (target) {
             target.active = !target.active;
+            isNowActive = target.active;
           }
         });
         render('users', container, user);
+        Toastify({ text: isNowActive ? 'Usuario activado.' : 'Usuario dado de baja.', className: 'toast-success' }).showToast();
       });
     });
 
@@ -742,20 +760,17 @@ const Views = (function () {
     Array.prototype.forEach.call(resetButtons, function (btn) {
       btn.addEventListener('click', function () {
         const id = btn.getAttribute('data-id');
-        const newPass = window.prompt('Nueva contraseña (mínimo 6 caracteres):', '123456');
-        if (!newPass || newPass.length < 6) {
-          return;
-        }
+        const defaultPass = '123456';
         DB.set(function (dbState) {
           const target = dbState.users.find(function (u) {
             return u.id === id;
           });
           if (target) {
             target.salt = DB.randomSalt();
-            target.passwordHash = hashPassword(target.salt, newPass);
+            target.passwordHash = hashPassword(target.salt, defaultPass);
           }
         });
-        window.alert('Contraseña restablecida. Comunicá la nueva clave solo a la persona titular.');
+        Toastify({ text: 'Contraseña restablecida a 123456. Comunicá la nueva clave solo a la persona titular.', className: 'toast-success' }).showToast();
         render('users', container, user);
       });
     });
@@ -813,6 +828,7 @@ const Views = (function () {
       const email = document.getElementById('p-email').value.trim();
       if (!fullName) {
         document.getElementById('profile-msg').textContent = 'El nombre no puede estar vacío.';
+        Toastify({ text: 'El nombre no puede estar vacío.', className: 'toast-error' }).showToast();
         return;
       }
       DB.set(function (dbState) {
@@ -825,6 +841,7 @@ const Views = (function () {
         }
       });
       document.getElementById('profile-msg').textContent = 'Perfil actualizado correctamente.';
+      Toastify({ text: 'Perfil actualizado correctamente.', className: 'toast-success' }).showToast();
       document.dispatchEvent(new CustomEvent('user:updated'));
     });
 
@@ -840,14 +857,17 @@ const Views = (function () {
       });
       if (!fresh || hashPassword(fresh.salt, current) !== fresh.passwordHash) {
         msg.textContent = 'La contraseña actual es incorrecta.';
+        Toastify({ text: 'La contraseña actual es incorrecta.', className: 'toast-error' }).showToast();
         return;
       }
       if (newPass.length < 6) {
         msg.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.';
+        Toastify({ text: 'La nueva contraseña debe tener al menos 6 caracteres.', className: 'toast-error' }).showToast();
         return;
       }
       if (newPass !== confirmPass) {
         msg.textContent = 'Las contraseñas nuevas no coinciden.';
+        Toastify({ text: 'Las contraseñas nuevas no coinciden.', className: 'toast-error' }).showToast();
         return;
       }
       DB.set(function (dbState) {
@@ -860,6 +880,7 @@ const Views = (function () {
         }
       });
       msg.textContent = 'Contraseña actualizada correctamente.';
+      Toastify({ text: 'Contraseña actualizada correctamente.', className: 'toast-success' }).showToast();
       document.getElementById('pass-current').value = '';
       document.getElementById('pass-new').value = '';
       document.getElementById('pass-confirm').value = '';

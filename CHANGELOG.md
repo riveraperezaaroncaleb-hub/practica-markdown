@@ -4,6 +4,9 @@ Registro cronológico de versiones, cambios y correcciones del sistema. Formato 
 
 ## [Unreleased]
 
+- Eliminación completa de ventanas emergentes nativas (`window.alert`, `window.confirm`, `window.prompt`), sustituidas por ejecuciones directas con notificaciones flotantes Toastify.
+- Integración universal de notificaciones flotantes con Toastify para todos los avisos, errores, confirmaciones y mensajes del sistema.
+- Sobrescritura global de `window.alert`, `window.confirm` y `window.prompt` para prevenir la apertura de ventanas nativas del navegador.
 - Pendiente: mover autenticación a un backend con sesiones HTTP.
 - Pendiente: reemplazar SHA-256 local por bcrypt/argon2 en el servidor.
 - Pendiente: persistencia en base de datos (SQLite/PostgreSQL).

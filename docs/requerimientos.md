@@ -53,7 +53,7 @@ Tareas técnicas:
 
 - [x] Colecciones `grades` y `attendance` en la capa de datos.
 - [x] Vistas diferenciadas por rol para carga y consulta.
-- [x] Validación de calificaciones entre 1 y 10.
+- [x] Validación de calificaciones entre 0 y 100.
 
 ### RF-04 — Tablón de comunicados
 
