@@ -16,6 +16,7 @@
     { id: 'attendance', label: 'Asistencia', icon: '☑' },
     { id: 'schedule', label: 'Horario', icon: '◷' },
     { id: 'users', label: 'Usuarios', icon: '⚙' },
+    { id: 'assistant', label: 'Asistente IA', icon: '🤖' },
     { id: 'profile', label: 'Mi perfil', icon: '◉' }
   ];
 
@@ -51,7 +52,7 @@
       '</form>' +
       '<p id="login-help" class="muted">Cuentas de demostración (solo datos ficticios):</p>' +
       '<ul class="demo-accounts">' +
-      '<li>admin / admin123 — Administración</li>' +
+      '<li>admin / 12345 — Administración</li>' +
       '<li>docente / docente123 — Docentes</li>' +
       '<li>estudiante / estudiante123 — Estudiantes / Familias</li>' +
       '</ul>' +
@@ -62,12 +63,11 @@
       '</main>';
 
     document.getElementById('btn-reset-login').addEventListener('click', function () {
-      if (window.confirm('Se restablecerán las cuentas de demostración y se perderán los cambios locales. ¿Continuar?')) {
-        DB.resetDemo();
-        document.getElementById('login-user').value = '';
-        document.getElementById('login-pass').value = '';
-        document.getElementById('login-msg').textContent = 'Datos restablecidos. Probá con admin / admin123.';
-      }
+      DB.resetDemo();
+      document.getElementById('login-user').value = '';
+      document.getElementById('login-pass').value = '';
+      document.getElementById('login-msg').textContent = 'Datos restablecidos. Probá con admin / 12345.';
+      Toastify({ text: 'Datos de demostración restablecidos. Probá con admin / 12345.', className: 'toast-success' }).showToast();
     });
 
     document.getElementById('login-form').addEventListener('submit', function (e) {
@@ -83,6 +83,7 @@
         showApp();
       } else {
         msg.textContent = result.message;
+        Toastify({ text: result.message, className: 'toast-error' }).showToast();
       }
     });
   }
@@ -191,12 +192,11 @@
     });
 
     document.getElementById('btn-reset').addEventListener('click', function () {
-      if (window.confirm('Se perderán los cambios y se restaurará la demo inicial. ¿Continuar?')) {
-        DB.resetDemo();
-        window.location.hash = '';
-        Auth.logout();
-        showLogin();
-      }
+      DB.resetDemo();
+      window.location.hash = '';
+      Auth.logout();
+      showLogin();
+      Toastify({ text: 'Datos de demostración restablecidos.', className: 'toast-success' }).showToast();
     });
 
     var main = document.getElementById('main');

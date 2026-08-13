@@ -4,6 +4,11 @@ Registro cronológico de versiones, cambios y correcciones del sistema. Formato 
 
 ## [Unreleased]
 
+- Incorporación del módulo de Asistente IA de aclaración de dudas (`#/assistant`) para orientación interactiva sobre la intranet y respuesta estricta "No estoy calificada para responder dicha pregunta." ante preguntas fuera de alcance.
+- Modificación del módulo de horarios para usar una grilla semanal (Lunes a Viernes) donde la administración solo ordena y asigna las materias ya existentes, desactivando el alta arbitraria de nuevos horarios.
+- Eliminación completa de ventanas emergentes nativas (`window.alert`, `window.confirm`, `window.prompt`), sustituidas por ejecuciones directas con notificaciones flotantes Toastify.
+- Integración universal de notificaciones flotantes con Toastify para todos los avisos, errores, confirmaciones y mensajes del sistema.
+- Sobrescritura global de `window.alert`, `window.confirm` y `window.prompt` para prevenir la apertura de ventanas nativas del navegador.
 - Pendiente: mover autenticación a un backend con sesiones HTTP.
 - Pendiente: reemplazar SHA-256 local por bcrypt/argon2 en el servidor.
 - Pendiente: persistencia en base de datos (SQLite/PostgreSQL).

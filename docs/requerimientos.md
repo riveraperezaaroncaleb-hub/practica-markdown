@@ -53,7 +53,7 @@ Tareas técnicas:
 
 - [x] Colecciones `grades` y `attendance` en la capa de datos.
 - [x] Vistas diferenciadas por rol para carga y consulta.
-- [x] Validación de calificaciones entre 1 y 10.
+- [x] Validación de calificaciones entre 0 y 100.
 
 ### RF-04 — Tablón de comunicados
 
@@ -81,6 +81,20 @@ Tareas técnicas:
 - [x] Mapa de permisos `PERMISSIONS` en `js/auth.js`.
 - [x] Menú lateral construido según las vistas permitidas.
 - [x] Redirección automática en el ruteo ante una vista no permitida.
+
+### RF-06 — Asistente IA de aclaración de dudas
+
+Historias de usuario:
+
+- [x] Como usuario, quiero realizar preguntas sobre el sistema y recibir aclaraciones automáticas estilo IA.
+- [x] Como usuario, quiero seleccionar preguntas sugeridas para probar rápidamente las consultas comunes.
+- [x] Como sistema, quiero responder la información relevante para temas escolares y responder estrictamente "No estoy calificada para responder dicha pregunta." ante cualquier consulta ajena.
+
+Tareas técnicas:
+
+- [x] Módulo `Assistant` (`js/assistant.js`) con base de conocimiento y normalización de texto.
+- [x] Vista interactiva `viewAssistant` en `js/views.js` con chat en vivo e indicador de escritura.
+- [x] Habilitación en menú lateral (`NAV`) y permisos (`PERMISSIONS`) para todos los roles.
 
 ## Cobertura no funcional
 
@@ -110,7 +124,7 @@ Tareas técnicas:
 Pasos para comprobar el prototipo de forma manual:
 
 1. Abrir `index.html` en el navegador.
-2. Iniciar sesión como `admin` / `admin123` y revisar el módulo de usuarios.
+2. Iniciar sesión como `admin` / `12345` y revisar el módulo de usuarios.
 3. Iniciar sesión como `docente` / `docente123` y cargar una calificación y una asistencia.
 4. Iniciar sesión como `estudiante` / `estudiante123` y verificar que se ven las calificaciones cargadas.
 5. Publicar un comunicado como docente y verificarlo con la cuenta de estudiante.

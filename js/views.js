@@ -32,10 +32,10 @@ const Views = (function () {
   }
 
   function gradeClass(value) {
-    if (value >= 7) {
+    if (value >= 70) {
       return 'grade-good';
     }
-    if (value >= 4) {
+    if (value >= 40) {
       return 'grade-mid';
     }
     return 'grade-bad';
@@ -69,6 +69,9 @@ const Views = (function () {
   }
 
   function setGrade(db, studentId, subjectId, period, value) {
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      return false;
+    }
     const existing = db.grades.find(function (x) {
       return x.studentId === studentId && x.subjectId === subjectId && x.period === period;
     });
@@ -77,6 +80,7 @@ const Views = (function () {
     } else {
       db.grades.push({ id: DB.uid('g'), studentId: studentId, subjectId: subjectId, period: period, value: value });
     }
+    return true;
   }
 
   function averageOf(db, studentId) {
@@ -138,6 +142,9 @@ const Views = (function () {
       case 'profile':
         viewProfile(container, user);
         break;
+      case 'assistant':
+        viewAssistant(container, user);
+        break;
       default:
         container.innerHTML = '<p>Vista no encontrada.</p>';
     }
@@ -172,11 +179,15 @@ const Views = (function () {
     }
 
     const recent = noticesFor(db, user).slice(0, 3);
+    const quickActions = user.role === 'student'
+      ? '<a class="btn btn-primary" href="#/profile">Editar mi perfil</a>'
+      : '<a class="btn btn-primary" href="#/notices">Agregar comunicado</a><a class="btn btn-outline" href="#/grades">Editar calificaciones</a><a class="btn btn-outline" href="#/attendance">Editar asistencia</a>' + (user.role === 'admin' ? '<a class="btn btn-outline" href="#/schedule">Agregar horario</a><a class="btn btn-outline" href="#/users">Agregar usuario</a><a class="btn btn-outline" href="#/profile">Editar mi perfil</a>' : '<a class="btn btn-outline" href="#/profile">Editar mi perfil</a>');
 
     container.innerHTML =
       '<section class="card">' +
       '<h2>Bienvenido, ' + esc(user.fullName) + '</h2>' +
       '<p class="muted">Rol: <strong>' + esc(DB.ROLES[user.role]) + '</strong></p>' +
+      '<div class="actions">' + quickActions + '</div>' +
       '<div class="stats-grid">' +
       stats.map(function (s) {
         return '<div class="stat-card"><span class="stat-value">' + esc(s.value) + '</span><span class="stat-label">' + esc(s.label) + '</span></div>';
@@ -205,8 +216,9 @@ const Views = (function () {
     container.innerHTML =
       (canWrite
         ? '<section class="card">' +
-          '<h2>Publicar comunicado</h2>' +
+          '<h2 id="notice-form-title">Publicar comunicado</h2>' +
           '<form id="notice-form">' +
+          '<input type="hidden" id="notice-id">' +
           '<div class="field">' +
           '<label for="notice-title">Título</label>' +
           '<input type="text" id="notice-title" required maxlength="120">' +
@@ -223,7 +235,8 @@ const Views = (function () {
           (user.role === 'admin' ? '<option value="teacher">Solo docentes</option>' : '') +
           '</select>' +
           '</div>' +
-          '<button type="submit" class="btn btn-primary">Publicar</button>' +
+          '<div class="actions"><button type="submit" class="btn btn-primary" id="notice-submit">Publicar</button>' +
+          '<button type="button" class="btn btn-outline hidden" id="notice-cancel">Cancelar</button></div>' +
           '</form>' +
           '</section>'
         : '') +
@@ -231,12 +244,12 @@ const Views = (function () {
       '<h2>Tablón de comunicados</h2>' +
       (list.length
         ? '<ul class="notice-list">' + list.map(function (n) {
-            const deletable = user.role === 'admin' || n.authorId === user.id;
+            const editable = user.role === 'admin' || n.authorId === user.id;
             return '<li class="notice-item">' +
               '<h3>' + esc(n.title) + '</h3>' +
               '<p class="muted">' + fmtDate(n.createdAt) + ' · Publicado por ' + esc(fullName(db, n.authorId)) + ' · Visible para ' + esc(n.audience === 'all' ? 'toda la comunidad' : DB.ROLES[n.audience]) + '</p>' +
               '<p>' + esc(n.body) + '</p>' +
-              (deletable ? '<button class="btn btn-danger btn-sm js-del-notice" data-id="' + esc(n.id) + '">Eliminar</button>' : '') +
+              (editable ? '<div class="actions"><button class="btn btn-outline btn-sm js-edit-notice" data-id="' + esc(n.id) + '">Editar</button><button class="btn btn-danger btn-sm js-del-notice" data-id="' + esc(n.id) + '">Eliminar</button></div>' : '') +
               '</li>';
           }).join('') + '</ul>'
         : '<p class="muted">No hay comunicados visibles.</p>') +
@@ -245,17 +258,38 @@ const Views = (function () {
     if (canWrite) {
       container.querySelector('#notice-form').addEventListener('submit', function (e) {
         e.preventDefault();
+        const id = document.getElementById('notice-id').value;
         DB.set(function (dbState) {
-          dbState.notices.push({
-            id: DB.uid('n'),
-            title: document.getElementById('notice-title').value.trim(),
-            body: document.getElementById('notice-body').value.trim(),
-            audience: document.getElementById('notice-audience').value,
-            authorId: user.id,
-            createdAt: new Date().toISOString()
-          });
+          const target = dbState.notices.find(function (notice) { return notice.id === id; });
+          if (target) {
+            if (user.role !== 'admin' && target.authorId !== user.id) {
+              return;
+            }
+            target.title = document.getElementById('notice-title').value.trim();
+            target.body = document.getElementById('notice-body').value.trim();
+            target.audience = document.getElementById('notice-audience').value;
+            return;
+          }
+          dbState.notices.push({ id: DB.uid('n'), title: document.getElementById('notice-title').value.trim(), body: document.getElementById('notice-body').value.trim(), audience: document.getElementById('notice-audience').value, authorId: user.id, createdAt: new Date().toISOString() });
         });
         render('notices', container, user);
+        Toastify({ text: id ? 'Comunicado actualizado correctamente.' : 'Comunicado publicado correctamente.', className: 'toast-success' }).showToast();
+      });
+
+      container.querySelector('#notice-cancel').addEventListener('click', function () { render('notices', container, user); });
+      container.querySelectorAll('.js-edit-notice').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const target = db.notices.find(function (notice) { return notice.id === btn.getAttribute('data-id'); });
+          if (!target) { return; }
+          document.getElementById('notice-id').value = target.id;
+          document.getElementById('notice-title').value = target.title;
+          document.getElementById('notice-body').value = target.body;
+          document.getElementById('notice-audience').value = target.audience;
+          document.getElementById('notice-form-title').textContent = 'Editar comunicado';
+          document.getElementById('notice-submit').textContent = 'Guardar cambios';
+          document.getElementById('notice-cancel').classList.remove('hidden');
+          document.getElementById('notice-title').focus();
+        });
       });
     }
 
@@ -263,15 +297,13 @@ const Views = (function () {
     Array.prototype.forEach.call(delButtons, function (btn) {
       btn.addEventListener('click', function () {
         const id = btn.getAttribute('data-id');
-        if (!window.confirm('¿Eliminar este comunicado?')) {
-          return;
-        }
         DB.set(function (dbState) {
           dbState.notices = dbState.notices.filter(function (n) {
             return n.id !== id;
           });
         });
         render('notices', container, user);
+        Toastify({ text: 'Comunicado eliminado correctamente.', className: 'toast-success' }).showToast();
       });
     });
   }
@@ -318,7 +350,6 @@ const Views = (function () {
           return '<th>' + esc(st.fullName) + '</th>';
         }).join('') + '</tr></thead><tbody>' + body + '</tbody></table>' +
         '</section>';
-      return;
     }
 
     const teacherSubject = db.subjects.find(function (s) {
@@ -340,7 +371,7 @@ const Views = (function () {
         const inputs = periods.map(function (p) {
           const v = getGrade(db, st.id, subjectId, p);
           return '<td><label class="sr-only" for="g-' + esc(st.id) + '-' + p + '">Nota período ' + p + ' de ' + esc(st.fullName) + '</label>' +
-            '<input type="number" id="g-' + esc(st.id) + '-' + p + '" class="grade-input" data-student="' + esc(st.id) + '" data-period="' + p + '" min="1" max="10" step="1" value="' + (v == null ? '' : v) + '"></td>';
+            '<input type="number" id="g-' + esc(st.id) + '-' + p + '" class="grade-input" data-student="' + esc(st.id) + '" data-period="' + p + '" min="0" max="100" step="1" value="' + (v == null ? '' : v) + '"></td>';
         }).join('');
         return '<tr><td>' + esc(st.fullName) + '</td>' + inputs + '</tr>';
       }).join('');
@@ -357,16 +388,27 @@ const Views = (function () {
 
     container.querySelector('#grade-save').addEventListener('click', function () {
       const subjectId = subjectIdOfCurrentSelection();
+      let invalidGrade = false;
+      container.querySelectorAll('.grade-input').forEach(function (input) {
+        const value = parseFloat(input.value);
+        if (input.value !== '' && (isNaN(value) || value < 0 || value > 100)) {
+          invalidGrade = true;
+        }
+      });
+      if (invalidGrade) {
+        Toastify({ text: 'Cada calificación debe estar entre 0 y 100.', className: 'toast-error' }).showToast();
+        return;
+      }
       DB.set(function (dbState) {
         container.querySelectorAll('.grade-input').forEach(function (input) {
           const value = parseFloat(input.value);
-          if (!isNaN(value) && value >= 1 && value <= 10) {
+          if (!isNaN(value)) {
             setGrade(dbState, input.getAttribute('data-student'), subjectId, parseInt(input.getAttribute('data-period'), 10), value);
           }
         });
       });
       render('grades', container, user);
-      window.alert('Calificaciones guardadas correctamente.');
+      Toastify({ text: 'Calificaciones guardadas correctamente.', className: 'toast-success' }).showToast();
     });
 
     container.querySelector('#grade-subject').addEventListener('change', function () {
@@ -462,7 +504,7 @@ const Views = (function () {
       const subjectId = currentSelection();
       const dateStr = container.querySelector('#att-date').value;
       if (!dateStr) {
-        window.alert('Seleccioná una fecha válida.');
+        Toastify({ text: 'Seleccioná una fecha válida.', className: 'toast-error' }).showToast();
         return;
       }
       DB.set(function (dbState) {
@@ -480,7 +522,7 @@ const Views = (function () {
         });
       });
       render('attendance', container, user);
-      window.alert('Asistencia guardada.');
+      Toastify({ text: 'Asistencia guardada.', className: 'toast-success' }).showToast();
     });
 
     container.querySelector('#att-subject').addEventListener('change', function () {
@@ -507,25 +549,107 @@ const Views = (function () {
 
   function viewSchedule(container, user) {
     const db = DB.get();
-    const course = user.course;
-    const entries = db.schedule.filter(function (s) {
-      return s.course === course;
-    });
-    const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    const availableCourses = Array.from(new Set(
+      db.subjects.map(function (s) { return s.course; })
+        .concat(db.users.map(function (u) { return u.course; }))
+        .filter(Boolean)
+    ));
+    if (!availableCourses.length) {
+      availableCourses.push('5° A');
+    }
+    const currentCourse = user.role === 'admin'
+      ? (container._selectedCourse || availableCourses[0])
+      : (user.course || '5° A');
 
-    const rows = entries.sort(function (a, b) {
-      return (a.time < b.time ? -1 : 1) || (a.day < b.day ? -1 : 1);
-    }).map(function (s) {
-      return '<tr><td>' + esc(s.day) + '</td><td>' + esc(s.time) + '</td><td>' + esc(subjectName(db, s.subjectId)) + '</td></tr>';
+    const days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    const defaultSlots = ['08:00', '10:00', '12:00', '14:00'];
+    const extraSlots = db.schedule
+      .filter(function (s) { return s.course === currentCourse; })
+      .map(function (s) { return s.time; })
+      .filter(function (t) { return defaultSlots.indexOf(t) === -1; });
+    const timeSlots = defaultSlots.concat(extraSlots).sort();
+
+    var courseSubjects = db.subjects.filter(function (s) {
+      return !s.course || s.course === currentCourse;
+    });
+    if (!courseSubjects.length) {
+      courseSubjects = db.subjects;
+    }
+
+    const courseSelectHtml = user.role === 'admin'
+      ? '<div class="field"><label for="schedule-course-select">Curso</label><select id="schedule-course-select">' +
+        availableCourses.map(function (c) {
+          return '<option value="' + esc(c) + '"' + (c === currentCourse ? ' selected' : '') + '>' + esc(c) + '</option>';
+        }).join('') + '</select></div>'
+      : '';
+
+    const ths = days.map(function (d) { return '<th>' + esc(d) + '</th>'; }).join('');
+
+    const trs = timeSlots.map(function (slot) {
+      const tds = days.map(function (day) {
+        const match = db.schedule.find(function (s) {
+          return s.course === currentCourse && s.day === day && s.time === slot;
+        });
+        const currentSubId = match ? match.subjectId : '';
+
+        if (user.role === 'admin') {
+          const options = '<option value="">-- Libre --</option>' +
+            courseSubjects.map(function (s) {
+              return '<option value="' + esc(s.id) + '"' + (s.id === currentSubId ? ' selected' : '') + '>' + esc(s.name) + '</option>';
+            }).join('');
+          return '<td><select class="schedule-cell-select" data-day="' + esc(day) + '" data-time="' + esc(slot) + '">' + options + '</select></td>';
+        } else {
+          const subName = currentSubId ? subjectName(db, currentSubId) : '';
+          return '<td>' + (subName ? '<span class="badge badge-ok">' + esc(subName) + '</span>' : '<span class="muted">—</span>') + '</td>';
+        }
+      }).join('');
+
+      return '<tr><td><strong>' + esc(slot) + ' hs</strong></td>' + tds + '</tr>';
     }).join('');
 
     container.innerHTML =
       '<section class="card">' +
-      '<h2>Horario — Curso ' + esc(course) + '</h2>' +
-      '<p class="muted">Días: ' + esc(days.join(', ')) + '</p>' +
-      (rows ? '<table class="table"><thead><tr><th>Día</th><th>Hora</th><th>Materia</th></tr></thead><tbody>' + rows + '</tbody></table>'
-            : '<p class="muted">Sin horario cargado.</p>') +
+      '<h2>Horario Semanal — Curso ' + esc(currentCourse) + '</h2>' +
+      '<p class="muted">' + (user.role === 'admin' ? 'Organizá y asigná las materias existentes en el horario semanal.' : 'Consulta del horario semanal de materias.') + '</p>' +
+      courseSelectHtml +
+      '<table class="table"><thead><tr><th>Hora</th>' + ths + '</tr></thead><tbody>' + trs + '</tbody></table>' +
+      (user.role === 'admin' ? '<button type="button" class="btn btn-primary" id="schedule-save-all">Guardar horario semanal</button>' : '') +
       '</section>';
+
+    if (user.role === 'admin') {
+      const courseSelect = container.querySelector('#schedule-course-select');
+      if (courseSelect) {
+        courseSelect.addEventListener('change', function (e) {
+          container._selectedCourse = e.target.value;
+          render('schedule', container, user);
+        });
+      }
+
+      const saveBtn = container.querySelector('#schedule-save-all');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+          DB.set(function (dbState) {
+            dbState.schedule = dbState.schedule.filter(function (s) {
+              return s.course !== currentCourse;
+            });
+            container.querySelectorAll('.schedule-cell-select').forEach(function (sel) {
+              const subId = sel.value;
+              if (subId) {
+                dbState.schedule.push({
+                  id: DB.uid('sch'),
+                  course: currentCourse,
+                  day: sel.getAttribute('data-day'),
+                  time: sel.getAttribute('data-time'),
+                  subjectId: subId
+                });
+              }
+            });
+          });
+          render('schedule', container, user);
+          Toastify({ text: 'Horario semanal actualizado correctamente.', className: 'toast-success' }).showToast();
+        });
+      }
+    }
   }
 
   function viewUsers(container, user) {
@@ -606,7 +730,11 @@ const Views = (function () {
         return u.username.toLowerCase() === username.toLowerCase() && u.id !== id;
       });
       if (usernameTaken) {
-        window.alert('Ese nombre de usuario ya existe.');
+        Toastify({ text: 'Ese nombre de usuario ya existe.', className: 'toast-error' }).showToast();
+        return;
+      }
+      if (id && password && password.length < 6) {
+        Toastify({ text: 'La nueva contraseña debe tener al menos 6 caracteres.', className: 'toast-error' }).showToast();
         return;
       }
 
@@ -621,11 +749,18 @@ const Views = (function () {
             target.email = email;
             target.role = role;
             target.course = course;
+            if (password) {
+              if (password.length < 6) {
+                return;
+              }
+              target.salt = DB.randomSalt();
+              target.passwordHash = hashPassword(target.salt, password);
+            }
           }
         });
       } else {
         if (!password || password.length < 6) {
-          window.alert('La contraseña inicial debe tener al menos 6 caracteres.');
+          Toastify({ text: 'La contraseña inicial debe tener al menos 6 caracteres.', className: 'toast-error' }).showToast();
           return;
         }
         const salt = DB.randomSalt();
@@ -644,6 +779,7 @@ const Views = (function () {
         });
       }
       render('users', container, user);
+      Toastify({ text: id ? 'Usuario actualizado correctamente.' : 'Usuario creado correctamente.', className: 'toast-success' }).showToast();
     });
 
     const editButtons = container.querySelectorAll('.js-edit-user');
@@ -674,18 +810,21 @@ const Views = (function () {
       btn.addEventListener('click', function () {
         const id = btn.getAttribute('data-id');
         if (id === user.id) {
-          window.alert('No podés darte de baja a vos mismo.');
+          Toastify({ text: 'No podés darte de baja a vos mismo.', className: 'toast-error' }).showToast();
           return;
         }
+        let isNowActive = false;
         DB.set(function (dbState) {
           const target = dbState.users.find(function (u) {
             return u.id === id;
           });
           if (target) {
             target.active = !target.active;
+            isNowActive = target.active;
           }
         });
         render('users', container, user);
+        Toastify({ text: isNowActive ? 'Usuario activado.' : 'Usuario dado de baja.', className: 'toast-success' }).showToast();
       });
     });
 
@@ -693,20 +832,17 @@ const Views = (function () {
     Array.prototype.forEach.call(resetButtons, function (btn) {
       btn.addEventListener('click', function () {
         const id = btn.getAttribute('data-id');
-        const newPass = window.prompt('Nueva contraseña (mínimo 6 caracteres):', '123456');
-        if (!newPass || newPass.length < 6) {
-          return;
-        }
+        const defaultPass = '123456';
         DB.set(function (dbState) {
           const target = dbState.users.find(function (u) {
             return u.id === id;
           });
           if (target) {
             target.salt = DB.randomSalt();
-            target.passwordHash = hashPassword(target.salt, newPass);
+            target.passwordHash = hashPassword(target.salt, defaultPass);
           }
         });
-        window.alert('Contraseña restablecida. Comunicá la nueva clave solo a la persona titular.');
+        Toastify({ text: 'Contraseña restablecida a 123456. Comunicá la nueva clave solo a la persona titular.', className: 'toast-success' }).showToast();
         render('users', container, user);
       });
     });
@@ -764,6 +900,7 @@ const Views = (function () {
       const email = document.getElementById('p-email').value.trim();
       if (!fullName) {
         document.getElementById('profile-msg').textContent = 'El nombre no puede estar vacío.';
+        Toastify({ text: 'El nombre no puede estar vacío.', className: 'toast-error' }).showToast();
         return;
       }
       DB.set(function (dbState) {
@@ -776,6 +913,7 @@ const Views = (function () {
         }
       });
       document.getElementById('profile-msg').textContent = 'Perfil actualizado correctamente.';
+      Toastify({ text: 'Perfil actualizado correctamente.', className: 'toast-success' }).showToast();
       document.dispatchEvent(new CustomEvent('user:updated'));
     });
 
@@ -791,14 +929,17 @@ const Views = (function () {
       });
       if (!fresh || hashPassword(fresh.salt, current) !== fresh.passwordHash) {
         msg.textContent = 'La contraseña actual es incorrecta.';
+        Toastify({ text: 'La contraseña actual es incorrecta.', className: 'toast-error' }).showToast();
         return;
       }
       if (newPass.length < 6) {
         msg.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.';
+        Toastify({ text: 'La nueva contraseña debe tener al menos 6 caracteres.', className: 'toast-error' }).showToast();
         return;
       }
       if (newPass !== confirmPass) {
         msg.textContent = 'Las contraseñas nuevas no coinciden.';
+        Toastify({ text: 'Las contraseñas nuevas no coinciden.', className: 'toast-error' }).showToast();
         return;
       }
       DB.set(function (dbState) {
@@ -811,10 +952,136 @@ const Views = (function () {
         }
       });
       msg.textContent = 'Contraseña actualizada correctamente.';
+      Toastify({ text: 'Contraseña actualizada correctamente.', className: 'toast-success' }).showToast();
       document.getElementById('pass-current').value = '';
       document.getElementById('pass-new').value = '';
       document.getElementById('pass-confirm').value = '';
     });
+  }
+
+  function formatChatMessage(text) {
+    if (!text) return '';
+    return esc(text)
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>');
+  }
+
+  function viewAssistant(container, user) {
+    var history = [
+      {
+        sender: 'ai',
+        text: '¡Hola, ' + user.fullName + '! Soy el Asistente IA de la Intranet Escolar. Estoy capacitado para responder tus preguntas sobre calificaciones, horarios, comunicados, asistencia y funciones del sistema.\n\n¿En qué te puedo ayudar hoy?'
+      }
+    ];
+
+    container.innerHTML =
+      '<header class="card assistant-header">' +
+      '<h2>🤖 Asistente IA de Aclaración de Dudas</h2>' +
+      '<p class="muted">Realizá tus preguntas sobre calificaciones, horarios, comunicados, asistencia, perfiles o normativa del colegio.</p>' +
+      '<div class="assistant-notice" role="status"><span class="badge badge-ok">IA Operativa</span> <span>Para preguntas ajenas al ámbito escolar o el sistema, el asistente responderá estrictamente: <em>"No estoy calificada para responder dicha pregunta."</em></span></div>' +
+      '</header>' +
+      '<section class="card assistant-chat-card">' +
+      '<div class="chat-header-actions">' +
+      '<h3>Conversación en vivo</h3>' +
+      '<button type="button" class="btn btn-outline btn-sm" id="btn-reset-chat">Reiniciar chat</button>' +
+      '</div>' +
+      '<div class="chat-box" id="chat-box" tabindex="0" aria-label="Historial de conversación" aria-live="polite"></div>' +
+      '<div class="chat-chips-area">' +
+      '<p class="hint muted">Preguntas sugeridas (hacé clic para probar):</p>' +
+      '<div class="chip-list" id="chip-list"></div>' +
+      '</div>' +
+      '<form id="chat-form" class="chat-form">' +
+      '<div class="chat-input-wrap">' +
+      '<input type="text" id="chat-input" placeholder="Escribí tu pregunta sobre la intranet o colegio..." autocomplete="off" required aria-label="Pregunta para el Asistente IA">' +
+      '<button type="submit" class="btn btn-primary" id="btn-chat-submit">Enviar</button>' +
+      '</div>' +
+      '</form>' +
+      '</section>';
+
+    var chatBox = container.querySelector('#chat-box');
+    var chipList = container.querySelector('#chip-list');
+    var chatForm = container.querySelector('#chat-form');
+    var chatInput = container.querySelector('#chat-input');
+    var btnReset = container.querySelector('#btn-reset-chat');
+
+    function renderMessages() {
+      chatBox.innerHTML = history.map(function (msg) {
+        var isUser = msg.sender === 'user';
+        var bubbleClass = isUser ? 'chat-bubble chat-bubble-user' : 'chat-bubble chat-bubble-ai';
+        var senderName = isUser ? esc(user.fullName) : 'Asistente IA Escolar';
+        var avatarIcon = isUser ? '👤' : '🤖';
+
+        return '<div class="' + bubbleClass + '">' +
+          '<div class="chat-bubble-header">' +
+          '<span class="chat-bubble-icon" aria-hidden="true">' + avatarIcon + '</span>' +
+          '<strong class="chat-bubble-author">' + senderName + '</strong>' +
+          '</div>' +
+          '<div class="chat-bubble-content">' + formatChatMessage(msg.text) + '</div>' +
+          '</div>';
+      }).join('');
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function renderChips() {
+      var suggested = Assistant.getSuggestedQuestions();
+      chipList.innerHTML = suggested.map(function (q) {
+        return '<button type="button" class="chip-btn" data-question="' + esc(q) + '">' + esc(q) + '</button>';
+      }).join('');
+    }
+
+    function handleSend(questionText) {
+      if (!questionText.trim()) return;
+
+      history.push({ sender: 'user', text: questionText });
+      renderMessages();
+
+      var typingEl = document.createElement('div');
+      typingEl.className = 'chat-bubble chat-bubble-ai chat-typing';
+      typingEl.innerHTML = '<div class="chat-bubble-header"><span class="chat-bubble-icon">🤖</span><strong>Asistente IA Escolar</strong></div><div class="typing-dots"><span>.</span><span>.</span><span>.</span></div>';
+      chatBox.appendChild(typingEl);
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      setTimeout(function () {
+        if (typingEl.parentNode) {
+          typingEl.parentNode.removeChild(typingEl);
+        }
+        var response = Assistant.ask(questionText);
+        history.push({ sender: 'ai', text: response });
+        renderMessages();
+      }, 300);
+    }
+
+    chatForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var q = chatInput.value.trim();
+      chatInput.value = '';
+      handleSend(q);
+    });
+
+    chipList.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('.chip-btn') : null;
+      if (btn) {
+        var q = btn.getAttribute('data-question');
+        if (q) {
+          handleSend(q);
+        }
+      }
+    });
+
+    btnReset.addEventListener('click', function () {
+      history = [
+        {
+          sender: 'ai',
+          text: '¡Hola, ' + user.fullName + '! Soy el Asistente IA de la Intranet Escolar. Estoy capacitado para responder tus preguntas sobre calificaciones, horarios, comunicados, asistencia y funciones del sistema.\n\n¿En qué te puedo ayudar hoy?'
+        }
+      ];
+      renderMessages();
+      Toastify({ text: 'Conversación reiniciada.', className: 'toast-info' }).showToast();
+    });
+
+    renderChips();
+    renderMessages();
   }
 
   return {

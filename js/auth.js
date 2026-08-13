@@ -73,7 +73,8 @@ const Auth = (function () {
     attendance: ['admin', 'teacher', 'student'],
     schedule: ['admin', 'student'],
     users: ['admin'],
-    profile: ['admin', 'teacher', 'student']
+    profile: ['admin', 'teacher', 'student'],
+    assistant: ['admin', 'teacher', 'student']
   };
 
   function canAccess(viewId, role) {
